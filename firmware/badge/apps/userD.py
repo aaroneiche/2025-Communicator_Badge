@@ -3,11 +3,17 @@
 import uasyncio as aio  # type: ignore
 
 from apps.base_app import BaseApp
-from net.net import register_receiver, send, BROADCAST_ADDRESS
-from net.protocols import Protocol, NetworkFrame
+
 from ui.page import Page
 import ui.styles as styles
 import lvgl
+
+from collections import deque, namedtuple
+
+from net.net import BROADCAST_ADDRESS, MY_ADDRESS, register_receiver, register_protocol, send
+from net.protocols import NetworkFrame, Protocol
+
+
 
 """
 All protocols must be defined in their apps with unique ports. Ports must fit in uint8.
@@ -16,6 +22,17 @@ Structdef is the struct library format string. This is a subset of cpython struc
 https://docs.micropython.org/en/latest/library/struct.html
 """
 # NEW_PROTOCOL = Protocol(port=<PORT>, name="<NAME>", structdef="!")
+
+
+#My attempt at an SAO sharing protocol.
+#SAO_PROTOCOL = Protocol(port=116,name="SAO_SHARE",structdef=f"!H10s30s30I1i1s60")
+SAO_PROTOCOL = Protocol(port=108,name="SAO_SHARE",structdef="!10s")
+'''
+SAOMessage = namedtuple(
+    "SAOMessage",["name","author","selltrade","qty","website"]
+)
+'''
+SAOMessage = namedtuple("SAOMessage",["name"])
 
 
 class App(BaseApp):
@@ -32,7 +49,6 @@ class App(BaseApp):
         # self.foreground_sleep_ms = 10
         # self.background_sleep_ms = 1000
 
-
     def start(self):
         """ Register the app with the system.
             This is where to register any functions to be called when a message of that protocol is received.
@@ -41,6 +57,8 @@ class App(BaseApp):
         """
         super().start()
         # register_receiver(NEW_PROTOCOL, self.receive_message)
+        register_receiver(SAO_PROTOCOL, self.receive_message)
+
 
     def run_foreground(self):
         """ Run one pass of the app's behavior when it is in the foreground (has keyboard input and control of the screen).
@@ -50,7 +68,9 @@ class App(BaseApp):
         """
 
         if self.badge.keyboard.f1():
-            print("Hello ")
+            #print("Hello ")
+            self.send_message("test")
+            
         if self.badge.keyboard.f2():
             print("World.  ")
         if self.badge.keyboard.f3():
@@ -95,4 +115,46 @@ class App(BaseApp):
         self.p = None
         super().switch_to_background()
 
+
+        
+        '''
+        chat_message = ChatMessage(MY_ADDRESS, self.my_alias, text, False)
+        if self.active_channel in self.channels:
+            self.channels[self.active_channel].append(chat_message)
+        else:
+            self.channels[self.active_channel] = deque(
+                [chat_message], self.channel_buffer_len
+            )
+        self.channel_messages_updated = True
+        tx_message = NetworkFrame().set_fields(
+            protocol=TEXT_CHAT,
+            destination=BROADCAST_ADDRESS,
+            ttl=self.chat_ttl,
+            payload=(self.active_channel, self.my_alias[:10], text),
+        )
+        send(tx_message)
+        '''
+
+
+    def send_message(self, text):
+        #message = SAOMessage(text)
+        print(f"sending message.")
+        
+        send(
+            NetworkFrame().set_fields(
+                protocol=SAO_PROTOCOL,
+                destination=MY_ADDRESS,
+                ttl=10,
+                payload=(text,)
+            )
+        )
+        print(f"sending completed")
+
+    def receive_message(self, message:NetworkFrame) -> None:
+        #name,author,selltrade,qty,website = message.payload
+        print("message received")
+        name = message.payload
+        print(name)
+        #print(f"name: %s - quantity: %i",name,qty)
+        print("message finishes")
 
